@@ -1,0 +1,51 @@
+請接手我的 HUB8735 Ultra 智慧魚缸攝影機專案，使用繁體中文、初學者能懂的方式說明，能操作的工作請直接完成。請先讀取同資料夾「完整操作與故障排查手冊.md」、「專案現況.json」及 portable/VALIDATION.txt；以下是 2026/10/28 的交接，不代表之後的即時狀態。
+
+【目標】
+HUB-8735_ultra（RTL8735B，JXF37 相機）從魚缸上方往下拍，辨識孔雀魚與金魚，先以五尾以內為主。畫面要框魚並顯示當前可見魚數。AI 在 8735 板上執行；完成後插電自動啟動，不靠電腦持續跑模型。現有模型只辨識單一 fish 類別，不分魚種，也不是跨影格追蹤或累計。未來才串接 ESP32S 水質設備。
+
+【權限與資料保護】
+允許讀取、準備、下載模型、修改新專案副本、編譯、排查與整理文件。每次真正覆寫開發板之前，必須先得到我的明確燒錄確認；不能因我說「繼續」或以前給過電腦操作權，就直接燒錄。不要更動原專案、原始照片或其他電腦資料。不要把 Wi-Fi 密碼、登入憑證、權杖或信件驗證資料送到 GitHub。GitHub 版 Wi-Fi 設定是占位文字，需要在我的電腦補填。不要用假 .nb 或重新命名 .pt 冒充成功。
+
+【目前真實狀態】
+電腦訓練及 PyTorch 測試完成。已向 Ameba 官方送出模型轉檔申請，頁面回傳 wpcf7-mail-sent-ok 並清空表單；這只代表申請表回報寄送成功，不證明已完成轉檔。交接時使用者仍未收到結果信，沒有官方魚模型 .nb。尚未完成帶真正魚 .nb 的韌體編譯、燒錄或現場辨識測試。
+搬機工具已實測辨識 ideasHatch 4.0.15-Release，串流模式 FISH_MODEL_READY=0 完整編譯成功；AI 與串流兩種程式碼都通過 C++ 語法/API 檢查。AI 語法檢查在獨立檢查單元略去模型安裝防護；不能冒稱帶 .nb 的 AI 韌體已經完整編譯。舊報告提到尚未登入、WinError 623 是歷史紀錄，請以這份交接和最新 VALIDATION 為準。
+
+【換電腦】
+Windows 11 64 位元，ZIP 全部解壓到短英文路徑 C:\Fish，確認 C:\Fish\00_START.cmd 存在；不要多套一層很長的檔名資料夾。至少預留 3 GB。雙擊 00_START.cmd：1 初始化離線工具、2 放入官方 .nb、3 編譯、4 經 FLASH 確認燒錄、5 編輯 Wi-Fi、6 看說明、0 結束。不需要重裝 Python/CUDA 或 Arduino IDE 才能使用這個燒錄選單。USB 驅動、序列監控和 VLC 未包含，是否需要另裝須依新電腦實際狀態確認。
+CLI 設定、下載和 build 都在 portable/runtime，不使用另一台電腦原本的 Arduino15。路徑會由 Start.ps1 動態建立；原電腦測試曾暫時用 Q: 短路徑，不要假設下一台也有 Q:。
+
+【重要位置，以解壓後根目錄為基準】
+project/FishModel_Run_20261027/delivery/HUB8735_FishCounter_V7/：本次要使用的 Arduino 專案。
+同層 FishConfig.h、FishModel.h、WifiCredentials.h；真正模型應是 yolov7_tiny.nb。
+project/FishModel_Run_20261027/delivery/fish_reparam.pt 與 fish_model_for_ameba.zip：本次已送轉檔的訓練成果。
+project/FishModel_Run_20261027/delivery/conversion-request.json：申請內容紀錄。
+project/FishModel_Run_20261027/：資料、標註、權重、評估與來源授權。
+project/HUB8735_RTSP_Basic/：原有純串流程式副本，可作回復參考，不是板上韌體讀回備份。
+project/FishTraining/ 與 project/HUB8735_FishCounter/：早期資料及草稿，不能當成本次韌體入口。
+portable/Start.ps1：目前可攜編譯／安裝模型／燒錄選單。
+原電腦工作區為 C:\Users\Evans\Documents\Codex\2026-10-08\codex-hub-8735-ultra-rtl8735b-windows；原照片 D:\fish，但新電腦不能假設存在這些路徑。
+
+【模型與板套件】
+YOLOv7-tiny，PyTorch reparameterized Detect head，RGB 416×416，class 0=fish，申請 UINT8；confidence=0.30，NMS IoU=0.30。不要擅改輸入尺寸或模型家族。
+fish_reparam.pt SHA256：5a379aa1f66e99b0f8949cd9bd49e0250fcab37684986683b6b830c84c07c53f
+ideasHatch Ameba Boards 4.0.15-Release；HUB-8735_ultra；Camera JXF37；NN model Flash；Auto Flash Disable；Erase Flash Disable；上傳 921600；序列監控 115200。原本 COM3，換機後必須重新確認。
+官方轉檔網址：https://www.amebaiot.com/en/amebapro2-ai-model-conversion/
+申請上傳 fish_model_for_ameba.zip，加 calibration_01 至 08 共八張公開來源圖片；09/10 是使用者空缸校正圖，未送官方。勿自行重複申請，先查結果信或失敗原因。
+
+【必須保留的實作細節】
+BSP 會掃描 .ino 的文字找自訂模型，不能只在頭檔藏 modelSelect。選單 2／安裝腳本會複製 .nb、在 .ino 放入 detector.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL); 並同時設 FISH_MODEL_READY=1、FISH_MODEL_STAGED=1。不能只手動改 READY。
+模型安裝目前只檢查副檔名、大小、雜湊及使用者確認；沒有語意驗證。模型輸入輸出、類別及量化必須依官方回傳報告核對。
+搬機版修改為先啟動相機與 AI，再嘗試 Wi-Fi；無連線時本機 AI/Serial 繼續，RTSP 不提供，網路恢復後需重開。WiFi.begin 本身可能阻塞，30 秒只是外層重試條件，不能宣稱嚴格上限。此行為尚未經板子驗證。
+選單 4 核對編譯成品與 .ino/.h/.nb 雜湊；修改 Wi-Fi、程式或模型都要重新編譯。只接受我當次輸入 FLASH 才覆寫。廠商上傳器使用工具目錄的固定 flash_ntz.bin，腳本會先用已核對的 build 成品更新它。
+Windows 廠商工具會因長路徑或 C.UTF-8 locale 失敗，Start.ps1 限制短英文根路徑並只在子程序環境設 LANG/LC_ALL/LC_CTYPE=C。不要改 Windows 全域地區或安全設定。
+
+【準確度不要誇大】
+目前只是原型。俯視斑馬魚保留測試 24 張，在 0.30 門檻數對 11 張，平均計數誤差約 0.88 尾；五尾以內子集 18 張數對 10 張，平均誤差約 0.61。10 張同缸空背景有 3 張誤判。三張孔雀魚／金魚俯視圖的 1、4、3 尾數對，是參與訓練的擬合檢查，不是實際魚缸準確率。量化與板上效果都未知。
+
+【接下來請依序做】
+1. 確認我目前的資料夾、Windows、COM 埠、是否已收到真正 .nb，以及 GitHub 版本是否需要補 Wi-Fi；先檢查已有檔案，不要讓我重複回答可讀得到的資訊。
+2. 尚無 .nb 時，完成工具與資料核對，告知唯一缺項；不要冒稱可直接燒錄 AI，也不要盲目重訓。
+3. 有 .nb 後保留回傳報告，核對模型設定，經選單 2 安裝、3 編譯；若失敗，保存完整終端輸出並依手冊排查。
+4. 編譯通過後向我說明將覆寫板上程式，取得本次確認再執行 4。不要選全片清除。
+5. 用序列輸出和 RTSP 驗證，再做空缸及 1–5 尾、反光、遮蔽、斷電重啟、無 Wi-Fi 測試。記錄觀察，沒有實測的項目請明說。
+6. 更新「專案現況.json」及交接文件，分清楚已做完、待測、失敗，不要直接沿用舊成功宣稱。

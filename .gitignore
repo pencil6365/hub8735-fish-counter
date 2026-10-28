@@ -1,0 +1,15 @@
+# Private local configuration and build state
+WifiCredentials.h
+!WifiCredentials.example.h
+*.nb
+model-install.json
+verified-compile.json
+portable/runtime/
+.venv/
+__pycache__/
+*.pyc
+*.zip
+*.pt
+*.bin
+*.log
+.env

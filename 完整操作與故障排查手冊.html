@@ -1,0 +1,592 @@
+﻿<!doctype html><html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>HUB8735 智慧魚缸完整操作手冊</title><style>body{max-width:1050px;margin:40px auto;padding:0 24px;font:17px/1.8 "Microsoft JhengHei",sans-serif;color:#172a32;background:#f8fbfc}h1,h2{color:#005f73;line-height:1.4}h2{border-bottom:2px solid #c7e1e5;padding-top:20px}table{border-collapse:collapse;width:100%;font-size:.9em;margin:20px 0;background:white}td,th{border:1px solid #c8d7dc;text-align:left;padding:9px;vertical-align:top}th{background:#e5f0f2}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#e5edef;padding:16px;border-radius:8px;font-size:.85em}code{font-family:Consolas,monospace;overflow-wrap:anywhere}a{color:#006d9a}strong{color:#9a380b}@media print{body{max-width:none;margin:0;padding:0;background:white;font-size:10pt}h2{break-after:avoid}tr,pre{break-inside:avoid}@page{size:A4;margin:16mm}}</style><main><h1 id="hub8735-ultra">HUB8735 Ultra 智慧魚缸：完整操作與故障排查手冊</h1>
+<p>文件基準：2026/10/28。適用於 <code>HUB8735_Fish_Transfer_20261028</code> 搬機套件及其 GitHub 去除私人設定版本。實際新增的測試、模型及版本，應追加到專案現況；本文件不表示所有可能故障都已經發生或已被排除。</p>
+<h2 id="1">1. 先了解現在做到哪裡</h2>
+<table>
+<thead>
+<tr>
+<th>項目</th>
+<th>狀態與證據</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>攝影機硬體</td>
+<td>使用者先前已確認正常；搬機後仍需驗證</td>
+</tr>
+<tr>
+<td>原有串流</td>
+<td>保留原程式副本，未在本次打包過程燒錄</td>
+</tr>
+<tr>
+<td>魚模型訓練</td>
+<td>完成，已有 <code>.pt</code> 與重參數化成果</td>
+</tr>
+<tr>
+<td>官方轉檔申請</td>
+<td>已送出，頁面回報寄送成功；交接時尚未收到結果</td>
+</tr>
+<tr>
+<td>官方魚模型 <code>.nb</code></td>
+<td><strong>缺少</strong>，不可把 <code>.pt</code> 改名替代</td>
+</tr>
+<tr>
+<td>可攜工具環境</td>
+<td>已從隨包離線檔案解出並辨認 4.0.15-Release</td>
+</tr>
+<tr>
+<td>串流模式全編譯</td>
+<td>通過，<code>FISH_MODEL_READY=0</code>；這不是魚 AI 成品</td>
+</tr>
+<tr>
+<td>AI 程式碼語法/API</td>
+<td>通過獨立檢查，未使用真正 <code>.nb</code>，不等於完整 AI 編譯</td>
+</tr>
+<tr>
+<td>魚 AI 完整編譯、燒錄、現場測試</td>
+<td><strong>尚未完成</strong></td>
+</tr>
+</tbody>
+</table>
+<p>現在可以準備另一台電腦、查看資料及等待轉檔。不能承諾這個壓縮檔目前拿到就能直接燒錄魚 AI；真正缺項是官方模型，後續仍有編譯和硬體測試。</p>
+<h2 id="2">2. 系統怎麼運作</h2>
+<pre><code class="language-text">魚缸上方相機
+  ├─ RGB 416×416 → 8735 的 AI → fish 框、信心分數 → 當前可見魚數
+  └─ H.264 影像 → 加上框及數字 → 區域網路 RTSP → 手機/電腦播放器
+
+USB Serial 115200 → 除錯訊息與每秒 JSON 計數
+</code></pre>
+<p>「在板上辨識」表示模型在 8735 上執行，電腦不必持續開著跑 AI。電腦仍用於準備、編譯、燒錄與觀察。想看到即時畫面，板子與播放器需要可互通的網路；只有插電且沒有網路時，不能從遠端播放器看到影像。</p>
+<p>目前計的是每個畫面可見、符合門檻的魚框，不是魚缸真實總數，也不是魚游過一次就累加。五尾是初期需求，程式不會把數字硬截成五；超過時加上 <code>CHECK COUNT</code>，提醒檢查誤框或場景魚數。</p>
+<h2 id="3">3. 搬機前要準備</h2>
+<ol>
+<li>Windows 11 64 位元電腦，至少 3 GB 可用空間；ZIP 本身約 810 MB，解壓及首次準備工具還會增加用量。</li>
+<li>HUB-8735_ultra、相機、可傳資料的 USB 線。充電線不一定能傳資料。</li>
+<li>完整搬機 ZIP。不要只複製 <code>.ino</code>，也不要只下載 GitHub 的程式碼 ZIP 就以為包含全部工具。</li>
+<li>官方回傳的魚模型 <code>.nb</code> 和轉檔報告；沒收到時先完成環境準備。</li>
+<li>現場 Wi-Fi 名稱及密碼；GitHub 版需要自己補填。</li>
+<li>要看影像時，準備支援 RTSP 的播放器，例如 VLC。要看 USB 訊息時，準備序列監控工具；可使用已安裝 Arduino IDE 的序列監控。這兩項與 USB 序列驅動未包入。</li>
+</ol>
+<p>GitHub 若提供 Release 下載，請取其中完整搬機資產；一般的 <code>Source code (zip)</code> 只會包含儲存庫內檔案。模型待轉檔是原型狀態，即使名為 Release，也不表示板上 AI 已通過測試。</p>
+<h2 id="4">4. 解壓與首次開啟</h2>
+<ol>
+<li>把 ZIP 複製到另一台電腦。</li>
+<li>右鍵 → 全部解壓縮，讓檔案直接放在 <code>C:\Fish</code>。</li>
+<li>確認入口是 <code>C:\Fish\00_START.cmd</code>。若變成 <code>C:\Fish\很長的資料夾名稱\00_START.cmd</code>，請把裡面整套檔案移到短英文資料夾，再開啟。</li>
+<li>不要在 ZIP 預覽內雙擊程式，否則同層檔案可能找不到。</li>
+<li>雙擊 <code>00_START.cmd</code>，選 <code>1</code>。第一次要解開開發板與編譯器，請等候完成；不必用系統管理員權限去改整台電腦設定。</li>
+<li>成功時應看到 <code>ideasHatch:AmebaPro2</code>、<code>4.0.15-Release</code>。</li>
+</ol>
+<p>選單使用隨包的 Arduino CLI，設定放在 <code>portable/runtime</code>。不需要先安裝 Arduino IDE、Python、CUDA 或大型訓練環境。它只為自己的 PowerShell 程序設定執行參數及 C locale，沒有修改 Windows 全域執行政策或地區設定。</p>
+<h2 id="5">5. 選單每個選項做什麼</h2>
+<table>
+<thead>
+<tr>
+<th>選項</th>
+<th>做的事</th>
+<th>是否改板子</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>解出與初始化離線開發板工具、列出套件</td>
+<td>否</td>
+</tr>
+<tr>
+<td>2</td>
+<td>選取官方 <code>.nb</code>、複製入新韌體、啟用自訂模型程式</td>
+<td>否，會改套件內的新專案副本</td>
+</tr>
+<tr>
+<td>3</td>
+<td>檢查模型、編譯、記錄來源與成品雜湊</td>
+<td>否</td>
+</tr>
+<tr>
+<td>4</td>
+<td>核對成品、詢問 COM、輸入 <code>FLASH</code> 才上傳</td>
+<td><strong>是，覆寫板上現有程式</strong></td>
+</tr>
+<tr>
+<td>5</td>
+<td>用記事本開啟 Wi-Fi 設定</td>
+<td>否，修改後要重編譯</td>
+</tr>
+<tr>
+<td>6</td>
+<td>開啟簡易說明</td>
+<td>否</td>
+</tr>
+<tr>
+<td>0</td>
+<td>結束</td>
+<td>否</td>
+</tr>
+</tbody>
+</table>
+<p>所有較早的訓練 <code>.cmd</code> 都不是這個搬機入口。請優先從根目錄選單操作。</p>
+<h2 id="6">6. 官方轉檔結果要怎麼處理</h2>
+<p>官方申請網址：<a href="https://www.amebaiot.com/en/amebapro2-ai-model-conversion/">Ameba 模型轉檔</a>。申請帳號由使用者本人保管，登入、驗證、密碼不應交給交接文件或 GitHub。</p>
+<p>交接時已送出的設定：</p>
+<table>
+<thead>
+<tr>
+<th>設定</th>
+<th>內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型類型</td>
+<td>YOLOv7-TINY-Pytorch</td>
+</tr>
+<tr>
+<td>上傳模型</td>
+<td><code>delivery/fish_model_for_ameba.zip</code>，內含 <code>fish_reparam.pt</code></td>
+</tr>
+<tr>
+<td>輸入</td>
+<td>RGB，H=416，W=416</td>
+</tr>
+<tr>
+<td>類別</td>
+<td>1，class 0 = fish</td>
+</tr>
+<tr>
+<td>量化申請</td>
+<td>UINT8</td>
+</tr>
+<tr>
+<td>校正圖</td>
+<td><code>calibration_01.jpg</code> 至 <code>calibration_08.jpg</code>，八張公開來源圖片</td>
+</tr>
+</tbody>
+</table>
+<p>校正資料夾還有 09/10，屬使用者空缸圖片，先前沒有上傳。申請頁沒有顯示申請編號；<code>mail-sent-ok</code> 只能證明網頁回報送出，不是模型轉換成功。</p>
+<p>收到信後：</p>
+<ol>
+<li>核對寄件來源和申請內容，再依連結下載結果，不要執行來源不明的下載程式。</li>
+<li>解開官方壓縮檔，保留原始下載檔、轉檔紀錄、設定與錯誤日誌。</li>
+<li>找真正的 <code>.nb</code>。若只有錯誤紀錄，就表示尚無可用模型。</li>
+<li>核對模型家族、輸入尺寸、RGB、量化、類別與輸出後處理。檔案能選進去不代表這些正確。</li>
+<li>在根目錄選單選 <code>2</code>，選擇該檔案。確認設定符合後輸入 <code>YES</code>。</li>
+<li>成功後新專案內應有 <code>yolov7_tiny.nb</code> 及 <code>model-install.json</code>。</li>
+</ol>
+<p>不要重複送申請來「加速」未知排隊；先查收件匣、垃圾郵件及官方回覆。沒有轉檔完成時間承諾。</p>
+<h2 id="7-wi-fi">7. 設定 Wi-Fi、編譯</h2>
+<p>選 <code>5</code> 開啟 <code>WifiCredentials.h</code>，在雙引號之間填入現場 Wi-Fi 名稱及密碼，保留程式語法。請勿把密碼貼到公開 issue 或截圖中。若設定含雙引號或反斜線，需由熟悉 C++ 的人處理字串轉義，不要直接刪除符號。</p>
+<p>GitHub 版本採占位文字，需填入後儲存關閉。先前私人搬機包含原設定，因此兩種版本可能不同；不要照舊截圖推測目前設定。</p>
+<p>選 <code>3</code> 後，程式會檢查模型及安裝記錄，再編譯。成功應出現 <code>編譯成功，尚未燒錄</code>，並產生 <code>portable/runtime/build/flash_ntz.bin</code> 與 <code>verified-compile.json</code>。修改 <code>.ino</code>、<code>.h</code>、Wi-Fi 或 <code>.nb</code> 之後都要重新選 <code>3</code>。</p>
+<p>本次預設的開發板設定：</p>
+<table>
+<thead>
+<tr>
+<th>設定</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Board package</td>
+<td>ideasHatch Ameba Boards 4.0.15-Release</td>
+</tr>
+<tr>
+<td>Board</td>
+<td>HUB-8735_ultra</td>
+</tr>
+<tr>
+<td>Camera</td>
+<td>JXF37（f37）</td>
+</tr>
+<tr>
+<td>NN Model Load From</td>
+<td>Flash</td>
+</tr>
+<tr>
+<td>Auto Flash Mode</td>
+<td>Disable</td>
+</tr>
+<tr>
+<td>Erase All Flash</td>
+<td>Disable</td>
+</tr>
+<tr>
+<td>Upload Speed</td>
+<td>921600</td>
+</tr>
+<tr>
+<td>FCS / OTA</td>
+<td>Disable / Disable</td>
+</tr>
+<tr>
+<td>Show NN Logs / Standard Lib</td>
+<td>Enable / Arduino_STD_PRINTF</td>
+</tr>
+</tbody>
+</table>
+<p>若改用 Arduino IDE，必須自行安裝相同套件並核對這些選項；IDE 不會自動使用可攜選單的獨立環境。先按驗證勾勾，真正上傳仍需另外確認。</p>
+<h2 id="8-com">8. 連板子、確認 COM 與燒錄</h2>
+<ol>
+<li>將板子接上電腦，觀察裝置管理員的「連接埠（COM 和 LPT）」。原機 COM3 只是歷史記錄，換機可能不同。</li>
+<li>若不確定哪個埠，可比較插入與拔除時新增／消失的埠；避免拔掉其他設備。</li>
+<li>若沒有新增 COM，先換可傳資料線及 USB 插孔，再查看裝置的硬體 ID，依晶片廠商官方來源取得對應驅動。不要猜測一定是某款 USB 晶片。</li>
+<li>關閉 Arduino 序列監控及其他占用同一 COM 的程式。</li>
+<li>確認願意覆寫板上現有程式，才選 <code>4</code>。</li>
+<li>選單列出電腦 COM 名稱後，輸入實際板子的 COM，例如 <code>COM5</code>。列出的埠並非每個都是本板。</li>
+<li>板子方向：鏡頭朝上，USB 接口朝下。按住左側較小的下載／功能按鈕，短按右側較大的 Reset，再放開左小按鈕。不同硬體修訂若按鍵位置不符，先核對板上絲印，不要盲按。</li>
+<li>回到選單，輸入大寫 <code>FLASH</code> 才會開始覆寫；不要拔線、斷電或反覆按 Reset。</li>
+<li>上傳工具回報成功後，短按右大 Reset 啟動新程式。</li>
+</ol>
+<p><strong>不要用 LED 是否變色作唯一判斷。</strong> 此板的下載模式燈色與長按秒數尚未建立可靠規則。下載操作靠按鍵順序與上傳回報確認；一般 Reset 為短按，不需要持續壓很久。</p>
+<p>未取得完整板上 Flash 讀回備份。<code>HUB8735_RTSP_Basic</code> 是原純串流程式的原始碼副本，恢復時仍要重新編譯、上傳；不等同可完整還原板子所有舊資料的映像。</p>
+<h2 id="9">9. 開機、影像和數字怎麼看</h2>
+<p>序列監控設 <code>115200</code>。若監控工具不在搬機電腦上，需要另外準備；避免同時開兩個監控或一邊監控一邊上傳。</p>
+<p>成功連上 Wi-Fi 時，Serial 會輸出 <code>RTSP: rtsp://...</code>。使用實際印出的完整網址與埠號，在同一區域網路的 VLC 等 RTSP 播放器開啟，不要硬套以前的 IP。</p>
+<p>畫面文字：</p>
+<ul>
+<li><code>Visible fish: N</code>：目前畫面的有效魚框數。</li>
+<li><code>fish XX%</code>：模型信心分數，不是該魚存在的校準機率或整體準確率。</li>
+<li><code>CHECK COUNT</code>：數目超出初期預期五尾，需檢查是否重框或實際魚較多。</li>
+<li><code>Fish model not ready | Count: N/A</code>：目前是未啟用魚模型的版本，不能當作辨識成功。</li>
+</ul>
+<p>每秒可能有以下 JSON，開機及 NN 除錯文字也會混在 USB Serial，接收端需要辨識合法 JSON 行：</p>
+<pre><code class="language-json">{&quot;schema&quot;:1,&quot;uptime_ms&quot;:12000,&quot;model_ready&quot;:true,&quot;visible_count&quot;:2,&quot;above_expected_max&quot;:false,&quot;boxes&quot;:[]}
+</code></pre>
+<p>上例只示意欄位；正常兩尾結果通常會有相應框資料，不能用這行示意資料冒充實際輸出。<code>model_ready=true</code> 是編譯設定，不是模型語意正確或硬體驗證成功的證明。</p>
+<h2 id="10-wi-fi">10. 插電自動辨識與 Wi-Fi 的關係</h2>
+<p>搬機版把相機和 AI 初始化排在 Wi-Fi 前面，避免原草稿一直等 Wi-Fi 才開始 AI。Wi-Fi 不通時預期本機 AI/Serial 持續，RTSP 不會啟動；網路恢復後需重新開機，目前沒有背景自動重連功能。</p>
+<p>外層 Wi-Fi 重試條件為 30 秒，但 <code>WiFi.begin()</code> 自己可能阻塞，因此不是嚴格 30 秒內完成。AI 在獨立串流任務中執行；Serial 計數要等 <code>setup()</code> 返回才進 <code>loop()</code>。實際無網路開機時間、資源使用、OSD 與串流啟動先後是否都正常，尚待 <code>.nb</code> 與實板驗證。</p>
+<p>完成燒錄、模型放在 Flash 後，預期普通供電即可開機，不需要 SD 卡或連著訓練電腦。供電不足仍可能造成重啟，需用穩定電源和線材驗證。</p>
+<h2 id="11">11. 現場測試：依順序做，不只看一張畫面</h2>
+<table>
+<thead>
+<tr>
+<th>測試</th>
+<th>要記錄什麼</th>
+<th>未通過時先看</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>空缸</td>
+<td>是否出現假魚框、發生位置與光線</td>
+<td>反光、裝飾、背景資料不足</td>
+</tr>
+<tr>
+<td>1 尾</td>
+<td>是否框住魚身和可見魚鰭、是否重框</td>
+<td>門檻、魚太小、模型設定</td>
+</tr>
+<tr>
+<td>2–5 尾分開游</td>
+<td>每一畫面數量和肉眼可見數</td>
+<td>漏框、框重複、縮放</td>
+</tr>
+<tr>
+<td>靠近／遮蔽</td>
+<td>只比較可見魚，不把完全遮住當已證實漏檢</td>
+<td>NMS、資料不足</td>
+</tr>
+<tr>
+<td>水面反光</td>
+<td>不同燈光、角度、水面波動的誤框</td>
+<td>先改善實體拍攝條件</td>
+</tr>
+<tr>
+<td>斷電再上電</td>
+<td>不按下載鍵能否自動啟動</td>
+<td>供電、模型載入、Flash 設定</td>
+</tr>
+<tr>
+<td>關閉基地台再開機</td>
+<td>本機 AI 是否啟動、Serial 是否恢復</td>
+<td>WiFi.begin 阻塞、啟動順序</td>
+</tr>
+<tr>
+<td>連續運作</td>
+<td>重啟、卡畫面、計數停止、溫度與耗電現象</td>
+<td>電源、記憶體、網路與串流</td>
+</tr>
+</tbody>
+</table>
+<p>建議記錄每個場景的時間、肉眼可見數、模型數、漏框／假框、門檻與程式版本，必要時保留經使用者同意的畫面。不要為了看起來數對而將輸出固定成五。</p>
+<p>資料集的測試分數不能當作這個魚缸的驗收通過。先約定現場可接受的誤差，再用獨立場景測試；不要邊調門檻邊把同一組畫面稱作最終測試。</p>
+<h2 id="12">12. 已遇到的問題，以及已採取的處理</h2>
+<table>
+<thead>
+<tr>
+<th>已觀察問題</th>
+<th>原因／處理</th>
+<th>尚存限制</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>很長路徑編譯出現找不到檔案、Insufficient memory</td>
+<td>廠商舊工具處理長路徑有問題；要求根路徑短英文，選單超過 30 字元或有非 ASCII 會擋下</td>
+<td>不代表所有「記憶體不足」訊息都是路徑問題</td>
+</tr>
+<tr>
+<td><code>locale::facet::_S_create_c_locale name not valid</code></td>
+<td>工具不接受繼承的 C.UTF-8；選單只在本程序設 <code>LANG/LC_ALL/LC_CTYPE=C</code></td>
+<td>不改 Windows 全域設定</td>
+</tr>
+<tr>
+<td>先前 <code>WinError 623</code> 編譯器無法啟動</td>
+<td>舊執行情境失敗；後來換執行情境已能啟動並完成串流編譯</td>
+<td>不是保證新電腦不會遇到 DLL 問題</td>
+</tr>
+<tr>
+<td>自訂模型只放頭檔，BSP 沒打包</td>
+<td>BSP 掃描 <code>.ino</code> 文字；安裝時將自訂 modelSelect 呼叫寫入 <code>.ino</code></td>
+<td>不能只改 READY 巨集</td>
+</tr>
+<tr>
+<td>訓練清單重複同一路徑被去重</td>
+<td>改成實際不同檔名變體，提高抽樣比重</td>
+<td>不算新增獨立照片</td>
+</tr>
+<tr>
+<td>目標魚訓練圖漏檢</td>
+<td>增加完整畫面與拉伸輸入補強，採用最後一輪權重</td>
+<td>僅少量訓練圖擬合改善，泛化未證實</td>
+</tr>
+<tr>
+<td>轉檔頁上方寫請登入但頁首已 Logout</td>
+<td>表單實際在下方；當時完成填寫與提交</td>
+<td>舊截圖不表示目前仍登入</td>
+</tr>
+<tr>
+<td>上傳檔案起初失敗</td>
+<td>當時由使用者開啟 Chrome 擴充功能的檔案網址權限後成功</td>
+<td>新電腦瀏覽器自動化若遇權限，交由使用者處理；不需為燒錄隨意修改瀏覽器設定</td>
+</tr>
+<tr>
+<td>串流編譯有 <code>Failed to open directory/json</code> 訊息</td>
+<td>此次後續編譯及連結仍成功，退出碼 0 並產生韌體，保留日誌</td>
+<td>AI 帶 <code>.nb</code> 的流程尚未證實，不能一律忽略同類錯誤</td>
+</tr>
+</tbody>
+</table>
+<h2 id="13">13. 常見或可能故障：依症狀排查</h2>
+<p>以下是排查方向，除前節列出的觀察外，不代表已在本板重現。</p>
+<table>
+<thead>
+<tr>
+<th>症狀／訊息</th>
+<th>先做什麼</th>
+<th>不要直接做什麼</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>雙擊後關閉或找不到 Start.ps1</td>
+<td>完整解壓、確認入口與 portable 同層，保留黑窗錯誤</td>
+<td>不要只複製 00_START.cmd</td>
+</tr>
+<tr>
+<td>要求短英文路徑</td>
+<td>放到 <code>C:\Fish</code>，避免桌面、雲端同步及多層資料夾</td>
+<td>不要只解除檔案長路徑保護後繼續硬試</td>
+</tr>
+<tr>
+<td>tar.exe 不存在／解壓失敗</td>
+<td>確認是支援的 Windows、空間、ZIP 完整性、目標可寫</td>
+<td>不下載來源不明的 tar 或 DLL</td>
+</tr>
+<tr>
+<td>初始化中斷</td>
+<td>先保留錯誤；選單再次初始化可能重解部分檔案。若環境損壞，備份自己補的 .nb、Wi-Fi 和日誌後，另解一份乾淨 ZIP</td>
+<td>不刪原專案、照片或其他 Arduino15</td>
+</tr>
+<tr>
+<td><code>.nb</code> 尚未安裝／大小不符</td>
+<td>找官方真正成品，核對回傳設定和格式</td>
+<td>不更名 .pt，也不放官方內建通用模型冒充魚模型</td>
+</tr>
+<tr>
+<td>已有不同模型，未覆寫</td>
+<td>保留兩個版本，先核對 hash、來源和用途</td>
+<td>不無條件覆寫舊模型</td>
+</tr>
+<tr>
+<td>模型與記錄不同／專案改動</td>
+<td>重新核對安裝記錄並編譯；保存正確模型</td>
+<td>不刪保護記錄來硬燒</td>
+</tr>
+<tr>
+<td><code>Use ... to stage .nb</code> 或 FISH_MODEL_STAGED 錯誤</td>
+<td>使用根選單 2 完整安裝 <code>.nb</code>，看 <code>.ino</code> 的模型呼叫</td>
+<td>不只手動改 READY=1</td>
+</tr>
+<tr>
+<td>缺少 library／找不到標頭</td>
+<td>確認使用隨包 CLI 與同版本 BSP，初始化完整</td>
+<td>不隨意升級 board package</td>
+</tr>
+<tr>
+<td>編譯成功但沒有 flash_ntz.bin</td>
+<td>保留完整輸出，視為不成功，查 postbuild</td>
+<td>不拿其他資料夾的舊 bin 補上</td>
+</tr>
+<tr>
+<td>COM 沒出現</td>
+<td>換資料線/USB 埠，查裝置管理員與官方驅動</td>
+<td>不先改波特率或清 Flash</td>
+</tr>
+<tr>
+<td>Access denied／COM busy</td>
+<td>關閉監控、播放器以外的序列程式、IDE 占用</td>
+<td>不反覆拔插到其他設備</td>
+</tr>
+<tr>
+<td>Upload timeout／一直等待</td>
+<td>核對 COM、下載按鍵順序、線材及電源；保存日誌</td>
+<td>不立刻用 Erase only 或亂改 Flash 位址</td>
+</tr>
+<tr>
+<td>上傳不穩</td>
+<td>先排線材/下載模式，必要時由熟悉者改較低上傳速率並記錄</td>
+<td>不改 Serial 115200 來當上傳修復，兩者用途不同</td>
+</tr>
+<tr>
+<td>開機亂碼</td>
+<td>監控設 115200、確認埠正確，再觀察重啟</td>
+<td>不把所有亂碼當 AI 故障</td>
+</tr>
+<tr>
+<td>一直重啟／無輸出</td>
+<td>穩定供電、短按 Reset、看最前面日誌、模型載入錯誤</td>
+<td>不先重新訓練</td>
+</tr>
+<tr>
+<td>Camera/stream link failed</td>
+<td>核對 JXF37、相機連接、程序啟動先後，保留錯誤</td>
+<td>通電時不要任意拔接相機排線</td>
+</tr>
+<tr>
+<td>模型載入失敗／輸出數量異常</td>
+<td>核對 YOLOv7-tiny、RGB、416×416、UINT8、單類別、輸出層及官方轉檔紀錄</td>
+<td>不任意更改張量尺寸讓它「不報錯」</td>
+</tr>
+<tr>
+<td>黑畫面／RTSP 無法播放</td>
+<td>讀實際網址、同區網、連線隔離、防火牆與播放器支援；先查相機/RTSP 啟動訊息</td>
+<td>不關閉整台電腦防火牆來碰運氣</td>
+</tr>
+<tr>
+<td>有影像但沒框／N/A</td>
+<td>N/A 先查是否啟用魚模型；有模型再查 Serial、類別、門檻和場景</td>
+<td>不宣稱沒有框就是沒有魚</td>
+</tr>
+<tr>
+<td>空缸有魚／魚數過多</td>
+<td>看反光/裝飾誤框、輸出類別與 NMS，收集實際背景資料</td>
+<td>不硬扣固定魚數掩蓋誤判</td>
+</tr>
+<tr>
+<td>小魚漏框／魚黏一起只一框</td>
+<td>讓整缸合理填滿視野、改善光線、檢查遮蔽，補獨立俯視資料</td>
+<td>不為數對而把同一魚框拆成多個</td>
+</tr>
+<tr>
+<td>無 Wi-Fi 時沒畫面</td>
+<td>本版預期沒有 RTSP；用 Serial 查本機狀態，網路恢復後重開</td>
+<td>不把沒 RTSP 直接當 AI 沒啟動</td>
+</tr>
+<tr>
+<td>新電腦無 GPU／Python 缺套件</td>
+<td>燒錄選單不需要 GPU/Python；舊 PC 預覽和重訓才需要</td>
+<td>不為燒錄安裝數 GB 訓練套件</td>
+</tr>
+<tr>
+<td>舊 .cmd、YAML、train.txt 指到 Evans</td>
+<td>這些是歷史訓練資料；重建 Python 環境並重新產生可用路徑</td>
+<td>不全機搜尋取代或修改原資料</td>
+</tr>
+</tbody>
+</table>
+<h2 id="14-ready">14. 為什麼不能直接改 READY，模型怎麼被放進韌體</h2>
+<p><code>.pt</code> 是訓練框架權重；<code>.nb</code> 是此板推論引擎需要的轉換格式。重參數化把訓練網路整理成部署結構，仍沒有做板上量化驗證。</p>
+<p>安裝時預期同時完成：</p>
+<ol>
+<li>複製官方模型為新專案的 <code>yolov7_tiny.nb</code>。</li>
+<li>設 <code>FISH_MODEL_READY=1</code> 與 <code>FISH_MODEL_STAGED=1</code>。</li>
+<li>在 <code>.ino</code> 放入 <code>detector.modelSelect(OBJECT_DETECTION, CUSTOMIZED_YOLOV7TINY, NA_MODEL, NA_MODEL);</code>。</li>
+<li>寫入 <code>model-install.json</code> 記錄 hash。</li>
+</ol>
+<p>這是為了讓 BSP 的文字掃描和 C++ 條件編譯一致。安裝只檢查副檔名、大小、使用者設定確認與 hash，無法從檔案大小得知模型是否真的正確；完整編譯及硬體測試不可省略。</p>
+<p>燒錄前會比對 <code>verified-compile.json</code> 的 <code>.ino/.h/.nb</code> 與輸出 bin 雜湊，並將核對過的 <code>flash_ntz.bin</code> 放到廠商工具使用的固定位置，再呼叫上傳器。請不要在此期間開另一份工程用相同工具目錄編譯或燒錄，避免共享工具檔案被更新。</p>
+<h2 id="15">15. 模型品質、資料來源與後續補資料</h2>
+<p>目前把全部魚合併為 class 0 <code>fish</code>，信心門檻 0.30，NMS IoU 0.30；輸入為固定 416×416 RGB 拉伸。門檻是保留驗證集挑選的原型設定，並非現場保證。</p>
+<table>
+<thead>
+<tr>
+<th>檢查</th>
+<th>結果</th>
+<th>正確解讀</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>水族館測試 63 張</td>
+<td>mAP@0.5 約 0.422</td>
+<td>框的綜合指標，不是數量正確率</td>
+</tr>
+<tr>
+<td>俯視斑馬魚測試 24 張</td>
+<td>mAP@0.5 約 0.546；11 張數量一致，MAE 約 0.88 尾</td>
+<td>不是使用者魚缸／目標魚種的準確率</td>
+</tr>
+<tr>
+<td>其中五尾以內 18 張</td>
+<td>10 張數對，MAE 約 0.61 尾</td>
+<td>樣本少，仍有漏框和誤框</td>
+</tr>
+<tr>
+<td>同缸空背景 10 張</td>
+<td>3 張出現誤框，共 3 框</td>
+<td>相近場景，不是外部獨立測試</td>
+</tr>
+<tr>
+<td>三張目標魚種俯視圖</td>
+<td>1、4、3 尾都框對</td>
+<td><strong>參與訓練的擬合檢查</strong>，不能當泛化證據</td>
+</tr>
+</tbody>
+</table>
+<p>上述數字來自 PyTorch，未包括 UINT8 量化或硬體差異。訓練有四階段，最後採 <code>runs/fish_whole_frame/weights/last.pt</code> 重參數化；選擇是為了目標訓練圖表現，不能宣稱挑出的模型在獨立目標測試一定最佳。</p>
+<p>資料包含 LibreYOLO 水族館（CC BY 4.0）、3D-ZeF 作者資料（作者標示 MIT）、Zenodo 少量重新檢查的俯視圖（CC BY 4.0）、Wikimedia 目標魚圖（包含 CC BY-SA 3.0 及公有領域）與使用者空缸副本。完整來源在 <code>資料來源與限制.md</code> 及各 source JSON。複製、重複檔名與拉伸變體不能算獨立拍攝的照片，發布資料集或模型的授權須依各來源條件處理，不要任意宣稱所有內容都是自有 MIT 授權。</p>
+<p>後續最有價值的是從實際鏡頭、相同高度、上方角度拍攝含魚與空缸畫面，涵蓋 1–5 尾、各位置、各種光線、反光與遮蔽。標每條可見魚，框盡量貼近可見魚體與魚鰭；完全看不到的魚不猜位置。近似連續影格、同次拍攝應留在同一 train/val/test 分組，避免資料洩漏。</p>
+<h2 id="16">16. 資料夾地圖與版本差異</h2>
+<pre><code class="language-text">C:\Fish\
+  00_START.cmd                       搬機操作入口
+  先讀我.txt                         快速說明
+  給下一個ChatGPT的提示詞.txt          新對話直接貼此檔
+  完整操作與故障排查手冊.md / .html    本手冊，HTML 可用瀏覽器閱讀與列印
+  專案現況.json                      交接狀態
+  FILE_MANIFEST.json                 ZIP 內檔案的 SHA256 清單
+  portable\Start.ps1                 選單實作
+  portable\VALIDATION.txt            已完成及未完成的檢查
+  portable\assets\                  官方套件的離線壓縮檔及索引
+  portable\runtime\                 首次執行才產生，可含模型相關成品和日誌
+  project\FishModel_Run_20261027\     訓練成果、資料與正式新草稿
+  project\HUB8735_RTSP_Basic\         原純串流原始碼副本
+  project\HUB8735_FishCounter\        早期草稿
+  project\FishTraining\              早期標註與訓練備份
+</code></pre>
+<p>不包含 Python 虛擬環境、下載快取、<code>.git</code>、<code>__pycache__</code>。搬機工具可用相對位置找自己，但早期訓練腳本、清單、YAML 仍可能寫死原機路徑。原始資料留在原機，搬機包是副本，不會把資料從原機搬走。</p>
+<p>本地私人 ZIP 與 GitHub ZIP 是不同版本。GitHub 版會把私人 Wi-Fi、通知信箱等文字設定改成占位文字，並重算清單；兩個 ZIP 雜湊不同是正常的。GitHub 版不能直接沿用本地私人 ZIP 的 SHA256 驗證。</p>
+<h2 id="17">17. 備份、更新、回復</h2>
+<p>每次換 <code>.nb</code> 或改設定，保留舊模型、官方回傳報告、<code>model-install.json</code>、編譯記錄及驗收結果，並以日期區分。不要將 Wi-Fi 密碼加入公開 Git 記錄。若要更新文件中的狀態，應寫明證據：例如「完整 AI 編譯退出碼 0」、「上傳工具回報成功」、「現場 3 尾測試通過」，不要只寫「完成」。</p>
+<p>燒錄失敗先不要清整片 Flash；讀完整日誌、確認下載模式，再決定是否需重新上傳。若要回復純串流，先查看 <code>project/HUB8735_RTSP_Basic</code>、補本地 Wi-Fi、相同 board package 編譯，取得使用者確認才上傳。未測試的恢復流程不能當作一定可還原。</p>
+<h2 id="18-chatgpt">18. 下一次交給 ChatGPT 要提供什麼</h2>
+<p>貼「給下一個ChatGPT的提示詞.txt」，再附：目前解壓位置、是否收到 <code>.nb</code>、<code>專案現況.json</code>、出錯的完整文字或截圖。若是模型錯誤，另附官方轉檔報告；若是計數不準，附不含私人資訊的現場畫面與實際可見魚數。不要貼密碼、帳號驗證碼或 access token。</p>
+<p>下一個 ChatGPT 若無法操作電腦，仍可依檔案逐步指導；不能因沒工具就聲稱已經讀檔、編譯或上傳。</p>
+<h2 id="19">19. 官方參考與文件時效</h2>
+<ul>
+<li><a href="https://www.amebaiot.com/en/amebapro2-ai-model-conversion/">Ameba 線上模型轉檔</a></li>
+<li><a href="https://www.amebaiot.com/en/amebapro2-apply-ai-model-docs/">自訂模型安裝說明</a></li>
+<li><a href="https://ameba-doc-arduino-sdk.readthedocs-hosted.com/en/latest/FAQ/yolov7_reparameterization.html">YOLOv7 重參數化說明</a></li>
+</ul>
+<p>以上為本專案採用的參考網址；網站、表單與套件可能更新，之後若與畫面不符應核對當時官方資料。手冊內的故障表提供常見方向，無法預列所有未發生的硬體與軟體問題。</p></main></html>
