@@ -1,0 +1,1 @@
+Missing: yolov7_tiny.nb. FISH_MODEL_READY=0 means RTSP streaming only, NOT fish detection. Obtain the converted 1-class 416x416 UINT8 model before enabling. No upload has been performed.
